@@ -177,6 +177,7 @@ def admin_dashboard():
         # Redirect or render the template with results
         return render_template('search_results.html', results=results, users=users_db, form=search_form, passwordForm=password_form, roleForm=role_form)
     return render_template('admin_dashboard.html', users_db=users_db, passwordForm=password_form, roleForm=role_form, searchForm=search_form, results=results)
+    users = users.query.all()
 
 
 @main.route('/change_password/<int:id>', methods=['POST'])
@@ -227,3 +228,11 @@ def delete_user(id):
     db.session.commit()
     flash(f'{user.display_name} deleted successfully!', category='success')
     return redirect(url_for('main.admin_dashboard'))
+
+@main.route("/<int:id>/inbox",methods=["POST","GET"])
+@login_required
+def show_inbox(id):
+    users_db = users.query.all()
+
+
+    return render_template("inbox.html",users=users_db)
