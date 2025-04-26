@@ -1,0 +1,14 @@
+venv/
+*.db
+.prettierrc
+__pycache__/
+.DS_Store
+*.png
+*.jpg
+*.jpeg
+!default.png
+.env
+pgpy_playground.py
+
+gnupg_home/
+keys/
