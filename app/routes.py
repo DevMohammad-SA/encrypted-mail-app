@@ -10,7 +10,7 @@ from werkzeug.utils import secure_filename
 from . import db, login_manager
 from .forms import (ChangePasswordForm, ChangeRoleForm, LoginForm, ProfileForm,
                     SearchForm, SignUpForm)
-from .models import users
+from .models import Message, users
 
 main = Blueprint('main', __name__)
 
@@ -229,10 +229,65 @@ def delete_user(id):
     flash(f'{user.display_name} deleted successfully!', category='success')
     return redirect(url_for('main.admin_dashboard'))
 
-@main.route("/<int:id>/inbox",methods=["POST","GET"])
+
+@main.route("/<int:id>/inbox", methods=["POST", "GET"])
 @login_required
 def show_inbox(id):
+    received_messages = Message.query.filter_by(recipient_id=id).all()
     users_db = users.query.all()
 
+    return render_template("inbox.html", users=users_db, messages=received_messages)
 
-    return render_template("inbox.html",users=users_db)
+
+@main.route("/send_message", methods=["POST", "GET"])
+@login_required
+def send_message():
+    if request.method == "POST":
+        recipient_id = request.form.get("recipient_id")
+        recipient = users.query.get(recipient_id)
+        plaintext_message = request.form.get("message")
+
+        if not recipient or not plaintext_message:
+            flash("Recipient and message are required.", "danger")
+            return redirect(url_for("main.send_message"))
+        public_key = recipient.public_key
+
+        if not public_key:
+            flash("Recipient does not have a public key.", "danger")
+            return redirect(url_for("main.send_message"))
+
+        gpg.import_keys(public_key)
+
+        # Encrypt the message
+        encrypted_data = gpg.encrypt(
+            plaintext_message, recipients=[recipient.email], always_trust=True)
+
+        if not encrypted_data.ok:
+            flash("Encryption Failed: "+encrypted_data.status, "danger")
+            return redirect(url_for("main.send_message"))
+
+        # Save the encrypted message to the database
+        new_message = Message(
+            sender_id=current_user.id,
+            recipient_id=recipient.id,
+            body=str(encrypted_data),
+        )
+        db.session.add(new_message)
+        db.session.commit()
+
+        flash("Message sent successfully!", "success")
+        return redirect(url_for("main.show_inbox", id=current_user.id))
+    # For GET request, show the send message form
+    all_users = users.query.all()
+    return render_template("send_message.html", users=all_users)
+
+
+@main.route('/message/<int:id>', methods=['GET'])
+@login_required
+def view_message(id):
+    message = Message.query.get_or_404(id)
+
+    if message.recipient_id != current_user.id:
+        flash("You do not have permission to view this message.", "danger")
+        return redirect(url_for("main.show_inbox", id=current_user.id))
+    return render_template("view_message.html", message=message)
