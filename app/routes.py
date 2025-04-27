@@ -282,12 +282,45 @@ def send_message():
     return render_template("send_message.html", users=all_users)
 
 
-@main.route('/message/<int:id>', methods=['GET'])
+@main.route('/view_message/<int:id>', methods=["GET", "POST"])
 @login_required
 def view_message(id):
     message = Message.query.get_or_404(id)
 
+    # Check if the current user is the recipient or the sender
     if message.recipient_id != current_user.id:
-        flash("You do not have permission to view this message.", "danger")
-        return redirect(url_for("main.show_inbox", id=current_user.id))
-    return render_template("view_message.html", message=message)
+        flash("You are not authorized to view this message.", "danger")
+        return redirect(url_for('main.inbox'))
+
+    decrypted_message = None
+
+    if request.method == "POST":
+        # Retrieve the user's password (which is the passphrase for the private key)
+        user_password = current_user.password
+
+        # Decrypt the message using the user's private key and password
+        private_key = current_user.private_key
+        passphrase = user_password  # Use the user's password as the passphrase
+
+        # Decrypt the encrypted message using the private key and passphrase
+        decrypted_data = gpg.decrypt(message.body, passphrase=passphrase)
+
+        if decrypted_data.ok:
+            decrypted_message = decrypted_data.data.decode('utf-8')
+        else:
+            flash("Decryption failed: " + decrypted_data.status, "danger")
+            return redirect(url_for('main.view_message', id=id))
+
+    return render_template('view_message.html', message=message, decrypted_message=decrypted_message)
+
+
+def decrypt_with_private_key(body, private_key):
+    # Use the private key and decrypt the message
+    gpg = gnupg.GPG(gnupghome='./gnupg_home')
+    gpg.import_keys(private_key)
+    decrypted_data = gpg.decrypt(body, passphrase=private_key)
+
+    if decrypted_data.ok:
+        return str(decrypted_data)
+    else:
+        return None
