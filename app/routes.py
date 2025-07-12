@@ -31,7 +31,8 @@ def login():
         print(">> Login button Clicked <<")
         if form.validate_on_submit():
             print(">> Login validate Clicked <<")
-            username = request.form.get('username')
+            username = request.form.get('username').lower()
+            print(f"he entered: {username}")
             password = request.form.get('password')
 
             # Check if user exists
